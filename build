@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Portable Mac Directory build script
+version="v1.0"
+program="pmacd"
+release_name="portable-mac-directory-$version"
+release_files="$program *.md images"
+
+cd "$(dirname "$0")"
+
+rm -rf "$release_name" "$release_name".zip
+
+if [ "$1" == "clean" ]; then
+    exit 0
+fi
+
+rm -rf "$release_name"
+mkdir "$release_name"
+cp -r ${release_files} "$release_name"
+chmod -R 777 "$release_name"
+zip -r "$release_name".zip "$release_name"

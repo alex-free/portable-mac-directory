@@ -1,0 +1,212 @@
+#!/bin/bash
+
+version=v1.0
+
+echo -e "Portable Mac Directory (PMACD) $version\nAlex Free (c) 2025 (3-BSD)"
+
+if ! command -v install_name_tool &>/dev/null; then
+    echo "Error: install_name_tool not found. Xcode must be installed."
+    exit
+fi
+
+if [ $# -eq 3 ]; then
+    echo "Custom prefix specified: \"$3"\"
+    specified_prefix=true
+elif [ $# -ne 2 ]; then
+    echo "Usage:
+
+    pmacd <executable or dynamic library file to make portable> <output folder>
+
+Optional 3rd argument (This is used by https://github.com/alex-free/source-engine-mac-app/tree/master/build):
+
+    pmacd <directory containing executable or dynamic library to make portable>  <output folder> <prefix of where libraries are located relative to the executable>
+"
+    exit 1
+fi
+
+executable_full_path=$(command -v "$1")
+
+if [ -f "$executable_full_path" ]; then
+	executable=$(basename "$1")
+
+	if file "$executable_full_path" | grep 'Mach-O' > /dev/null 2>&1; then
+		echo "Validated "$executable_full_path" as an executable or shared library"
+	elif file "$executable_full_path" | grep 'shell' > /dev/null 2>&1; then
+    	read -p "Error: "$executable_full_path" is NOT actually an executable file. It is a shell script that executes the real executable, which is somewhere else. Do you want to view the shell script "$executable_full_path"? (Y/n): " -n 1 -r
+		
+		if [ $REPLY = "y" ] || [ $REPLY = "Y" ]; then
+			echo
+      		cat "$executable_full_path"
+      	fi
+      	
+      	exit 0
+   else
+   		echo "Error: "$executable_full_path" is not an executable."
+		exit 1
+	fi
+else
+    echo "Error: \"$1\" does not exist"
+    exit 1
+fi
+
+if [ -e "$2" ]; then
+    echo "Info: "$2" is an existing directory"
+else
+    mkdir "$2"
+fi
+
+# Realpath is not available on Mac OS 12 but was added in Mac OS 13: https://apple.stackexchange.com/questions/450035/is-the-unix-realpath-command-distributed-with-macos-ventura
+cd "$2"
+cp -v "$executable_full_path" .
+
+# Run otool to get shared libraries of the input Mach-O file
+otool_output=$(otool -L ./"$executable")
+
+# Process each line of the output of otool -L except the first two
+{
+    first_line=true
+    
+    # Process each line from otool output
+    while IFS= read -r line; do
+        # Extract just the first part of the line (the library path)
+        lib_path=$(echo "$line" | awk '{print $1}')
+
+        # Skip the first line (garbage)
+        if [ "$first_line" = true ]; then
+            first_line=false
+            continue
+        fi
+        
+        # We can't re-run this on a file again
+        if [[ $lib_path == "@executable_path"* ]]; then
+            echo "Info: $lib_path has been modified by pmacd previously."
+            continue
+        fi
+
+        # Copy library to the current directory. We check if it exists because somethings like /usr/lib/libSystem.B.dylib actually are not a file anymore in at least Mac OS 12.
+        if [ -e "$lib_path" ]; then
+            cp "$lib_path" .
+        fi
+    done
+} <<< "$otool_output"
+
+# We use this to find out when we got through scanning for all the shared libraries.
+count_files() {
+    # Count only regular files (excluding directories)
+    find . -maxdepth 1 -type f | wc -l
+}
+
+# Now that we have some initial Mach-0 files, we need to scan those too to find the rest.
+{
+    # Initialize the number of files before the first run
+    prev_count=0
+    # Start a while loop to continue processing as long as the file count increases
+    while true; do
+        current_count=$(count_files)
+
+        # We got em all
+        if [ "$current_count" -le "$prev_count" ]; then
+            echo "All shared libraries where found in $scans scans."
+            break
+        fi
+        # If this is zero we haven't even ran 1 scan yet...
+        if [ "$prev_count" -ne 0 ]; then
+            echo "Additional shared libraries were found in the last scan, searching for more..."
+        fi
+
+        # Process each file in the current directory
+        for copied_lib in ./*; do
+
+            if file "$copied_lib" | grep -q "Mach-O"; then
+                echo "Checking Mach-O file: $copied_lib"
+
+                # Get the list of libraries again using otool
+                otool_output=$(otool -L "$copied_lib")
+
+                # Process each line from otool output
+                first_line=true
+                while IFS= read -r line; do
+                    # Extract just the first part of the line (the library path)
+                    lib_path=$(echo "$line" | awk '{print $1}')
+
+                    # Skip the first line (garbage)
+                    if [ "$first_line" = true ]; then
+                        first_line=false
+                        continue
+                    fi
+
+                    # We can't re-run this on a file again
+                    if [[ $lib_path == "@executable_path"* ]]; then
+                        echo "Info: $lib_path has been modified by pmacd previously."
+                        continue
+                    fi
+                    
+                    # Copy library to the current directory. We check if it exists because somethings like /usr/lib/libSystem.B.dylib actually are not a file anymore in at least Mac OS 12.
+                    if [ -e "$lib_path" ]; then
+                        cp "$lib_path" .
+                    fi
+                done <<< "$otool_output"
+            fi
+        done
+        # Keep track of the scans.
+        scans=$((scans + 1))
+        # Update the previous file count for the next iteration
+        prev_count=$current_count
+    done
+}
+
+# Now that all libraries are copied, we will run install_name_tool for any and all Mach-O files we got
+
+# Process each Mach-O file in the current directory
+for copied_lib in ./*; do
+    # Check if the file is a Mach-O binary
+    if file "$copied_lib" | grep -q "Mach-O"; then
+        echo "Running install_name_tool for Mach-O file: $copied_lib"
+
+        # Get the list of libraries using otool
+        otool_output=$(otool -L "$copied_lib")
+
+        # Process each line from otool output
+        first_line=true
+        while IFS= read -r line; do
+            # Extract just the first part of the line (the library path)
+            lib_path=$(echo "$line" | awk '{print $1}')
+
+            # Skip the first line (garbage)
+            if [ "$first_line" = true ]; then
+                first_line=false
+                continue
+            fi
+
+            # We can't re-run this on a file again
+            if [[ $lib_path == "@executable_path"* ]]; then
+                echo "Info: $lib_path has been modified by pmacd previously."
+                continue
+            fi
+
+            # Skip libraries that start with /System or /usr/lib
+            if [[ $lib_path == /System* || $lib_path == /usr/lib* ]]; then
+                continue
+            fi
+
+            lib_filename=$(basename "$lib_path")
+            if ! [ $specified_prefix ]; then
+                install_name_tool -change "$lib_path" "@executable_path/$lib_filename" "$copied_lib"
+            else
+                install_name_tool -change "$lib_path" "@executable_path/"$3"/$lib_filename" "$copied_lib"
+            fi
+        done <<< "$otool_output"
+    fi
+done
+
+exit 0
+# Display the updated libraries with otool -L for each Mach-O file
+echo "Updated library paths for all Mach-O files:"
+for copied_lib in ./*; do
+    # Check if the file is a Mach-O binary
+    if file "$copied_lib" | grep -q "Mach-O"; then
+        otool -L "$copied_lib"
+    fi
+done
+
+echo "Paths updated for all Mach-O files successfully."
