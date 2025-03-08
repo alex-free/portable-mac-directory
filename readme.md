@@ -8,7 +8,7 @@ Portable Mac Directory is designed to make releasing Mac OS software easy and ac
 
 This is basically the same thing as my [Portable Linux Executable Directory](https://github.com/alex-free/pled) tool but for all Mac OS X/Mac OS versions since 10.4! I have been wanting to write this tool for Mac OS for literal years and I finally got around to it.
 
-| [Homepage](https://alex-free.github.io/portable-mac-directory) | [Github](https://github.com/alex-free/portable-mac-directory) |
+| [Homepage](https://alex-free.github.io/portable-mac-directory) | [Github](https://github.com/alex-free/portable-mac-directory) | [MacRumors Thread](https://forums.macrumors.com/threads/portable-mac-directory-a-new-tool-that-makes-mac-os-executables-portable.2448713/) |
 
 ## Table Of Contents
 
@@ -59,6 +59,10 @@ Here is how I make the `ffplay` from Macports (previously I did `sudo port insta
 
 ## Requirements For Portability
 
+### All Shared Libraries Are Explicitly Referenced In The Input Executable Or Shared Library
+
+The standard way shared libraries work are they are referenced in the executable information, so that the executable loader can open them before running the executable code. Some software (very commonly web browsers) use `dlopen()` code in the executable themselves to open shared libraries after the executable is initialized and already running. PMACD can not find dynamic libraries loaded in this manner and such executables that do this are unsupported and out of scope of what this is for (see [issue 1](https://github.com/alex-free/portable-mac-directory/issues/1)).
+
 ### Real Dynamically Linked Executable File
 
 Portable Mac Directory **requires an actual executable file as the first argument and NOT a shell-script wrapper**. Some software installed by Homebrew or MacPorts may actually be a shell script wrapper, but be presented as the executable. Portable Mac Directory will refuse to function on such a shell script wrapper, as it verifies if the first argument is an actual executable file. If Portable Mac Directory finds this not to be the case, it will helpfully offer to display the shell script wrapper's contents to help you figure out where the real executable is. This is a good start, but typically it may be easier to just recompile the target software entirely yourself, figure out the configuration and any required external files, and then go from there. 
@@ -72,6 +76,8 @@ Many executables may expect explicit file paths to things like config files, dat
 Modern Mac OS (at least Mac OS 12) has executables link to system libraries and frameworks which are not actually present as files on your system partition. For example, `/usr/lib/libSystem.B.dylib` is not an actual file. Portable Mac Directory does check for this and still works if this is the case.
 
 As of right now, Portable Mac Directory copies every dynamically linked library. That includes all system frameworks and system libraries (if they are actual files on disk as discussed above in newer Mac OS versions this is not the case). There may be an option or change in the future where system frameworks and libraries can be ignored, but all other dynamically linked libraries are still copied (since this may be overkill for some uses).
+
+PMACD can invalidate code signatures on signed software. Make sure your Mac is set up to allow unsigned code if your running a recent Mac OS.
 
 ## Real World Examples
 
