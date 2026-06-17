@@ -1,10 +1,12 @@
-# Portable Mac Directory (PMacD)
+# Portable Mac Directory (PMACD)
 
 _By Alex Free_
 
 Makes Mac OS executables portable. Release dynamically linked Mac OS executables with ‘Windows-like software portability’. On Windows it is common for software to be distributed as an executable in it’s own folder, which also contains any dynamically linked libraries. This ensures it can ‘run anywhere`. You can do this on Windows because the library linker searches the directory that the executable file is in for the dynamic libraries it needs to run (which Linux does not do). This behavior is very desirable an OS such as Mac OS. Packaging software for Mac OS can become a nightmare quickly when dynamic libraries are involved. This is common when you have [Homebrew](https://brew.sh/) or [MacPorts](https://www.macports.org/) to install dependencies you need to build and run your executable.
 
 Portable Mac Directory is designed to make releasing Mac OS software easy and accessible by bringing the same Windows behavior and ideas to Mac OS. The Portable Mac Directory version of a Mac OS executable will run on any Mac with the same Mac OS version, and newer versions should also work fine. This is because the portable mac directory version is a directory containing all dynamically linked shared libraries and the executable points to them.
+
+![curl-linkage.png](images/curl-linkage.png)
 
 This is basically the same thing as my [Portable Linux Executable Directory](https://github.com/alex-free/pled) tool but for all Mac OS X/Mac OS versions since 10.4! I have been wanting to write this tool for Mac OS for literal years and I finally got around to it.
 
@@ -23,9 +25,21 @@ This is basically the same thing as my [Portable Linux Executable Directory](htt
 
 ## Downloads
 
-### Version 1.0 (2/4/2025)
+### Version 1.0.1 (6/17/2026)
 
-* [portable-mac-directory-v1.0.zip](https://github.com/alex-free/portable-mac-directory/releases/download/v1.0/portable-mac-directory-v1.0.zip) _For Mac OS X 10.4 and newer_
+* Fix for Mac OS 10.12 and other older versions.
+
+* No longer copies anything from `/System` or `/usr/lib` (doesn't need to, compiled software on Mac OS 10.12 is working on Mac OS 10.13 just fine).
+
+* Fixes bug that missed some dynamic libraries in certain situations.
+
+----------------------------------------------------
+
+* [portable-mac-directory-v1.0.1.zip](https://github.com/alex-free/portable-mac-directory/releases/download/v1.0.1/portable-mac-directory-v1.0.1.zip) _For Mac OS X 10.4 and newer_
+
+----------------------------------------------------
+
+[Previous versions](changelog.md)
 
 ## Requirements
 
@@ -69,13 +83,9 @@ Portable Mac Directory **requires an actual executable file as the first argumen
 
 ### External Resource Files
 
-Many executables may expect explicit file paths to things like config files, databases, etc. Portable Mac Directory has no way of knowing about any such files that the executable may need to run correctly and as intended. When making a program portable with Portable Mac Directory, it is important to figure out how to set the program to use portable, self-contained resource files such as these. Compiling a program from scratch is sometimes the easiest way to accomplish this.
+Many executables may expect explicit file paths to things like config files, databases, etc. Portable Mac Directory has no way of knowing about any such files that the executable may need to run correctly and as intended. When making a program portable with Portable Mac Directory, it is important to figure out how to set the program to use portable, self-contained resource files such as these (i.e. `curl` can do `curl --cacert cacert.pem`). Compiling a program from scratch is sometimes the easiest way to accomplish this.
 
 ## Further Notes
-
-Modern Mac OS (at least Mac OS 12) has executables link to system libraries and frameworks which are not actually present as files on your system partition. For example, `/usr/lib/libSystem.B.dylib` is not an actual file. Portable Mac Directory does check for this and still works if this is the case.
-
-As of right now, Portable Mac Directory copies every dynamically linked library. That includes all system frameworks and system libraries (if they are actual files on disk as discussed above in newer Mac OS versions this is not the case). There may be an option or change in the future where system frameworks and libraries can be ignored, but all other dynamically linked libraries are still copied (since this may be overkill for some uses).
 
 PMACD can invalidate code signatures on signed software. Make sure your Mac is set up to allow unsigned code if your running a recent Mac OS.
 

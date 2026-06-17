@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Portable Mac Directory build script
-version="v1.0"
+version="v1.0.1"
 program="pmacd"
 release_name="portable-mac-directory-$version"
 release_files="$program *.md images"
@@ -14,7 +14,6 @@ if [ "$1" == "clean" ]; then
     exit 0
 fi
 
-rm -rf "$release_name"
 mkdir "$release_name"
 cp -r ${release_files} "$release_name"
 chmod -R 777 "$release_name"

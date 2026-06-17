@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version=v1.0
+version=v1.0.1
 
 echo -e "Portable Mac Directory (PMACD) $version\nAlex Free (c) 2025 (3-BSD)"
 
@@ -83,10 +83,13 @@ otool_output=$(otool -L ./"$executable")
             continue
         fi
 
-        # Copy library to the current directory. We check if it exists because somethings like /usr/lib/libSystem.B.dylib actually are not a file anymore in at least Mac OS 12.
-        if [ -e "$lib_path" ]; then
-            cp "$lib_path" .
+        # IGNORE SYSTEM LIBRARIES AND FRAMEWORKS
+        if [[ $lib_path == /System* || $lib_path == /usr/lib* ]]; then
+            continue
+        else
+            cp -nv "$lib_path" .
         fi
+
     done
 } <<< "$otool_output"
 
@@ -141,10 +144,11 @@ count_files() {
                         continue
                     fi
                     
-                    # Copy library to the current directory. We check if it exists because somethings like /usr/lib/libSystem.B.dylib actually are not a file anymore in at least Mac OS 12.
-                    if [ -e "$lib_path" ]; then
-                        cp "$lib_path" .
+                    # Bail on system libraries and libs.
+                    if ! [[ $lib_path == /System* || $lib_path == /usr/lib* ]]; then
+                        cp -nv "$lib_path" .
                     fi
+                    
                 done <<< "$otool_output"
             fi
         done
@@ -184,28 +188,31 @@ for copied_lib in ./*; do
                 continue
             fi
 
-            # Skip libraries that start with /System or /usr/lib
-            if [[ $lib_path == /System* || $lib_path == /usr/lib* ]]; then
+            # Bail on system libraries and libs.
+            if ! [[ $lib_path == /System* || $lib_path == /usr/lib* ]]; then
+                cp -nv "$lib_path" .
+            else
                 continue
             fi
 
             lib_filename=$(basename "$lib_path")
-            if ! [ $specified_prefix ]; then
+            if ! [[ "$specified_prefix" == "true" ]]; then
                 install_name_tool -change "$lib_path" "@executable_path/$lib_filename" "$copied_lib"
+                install_name_tool -id "@executable_path/$lib_filename" "$copied_lib"
             else
                 install_name_tool -change "$lib_path" "@executable_path/"$3"/$lib_filename" "$copied_lib"
+                install_name_tool -id "@executable_path/"$3"/$lib_filename" "$copied_lib"
             fi
         done <<< "$otool_output"
     fi
 done
 
-exit 0
 # Display the updated libraries with otool -L for each Mach-O file
 echo "Updated library paths for all Mach-O files:"
 for copied_lib in ./*; do
     # Check if the file is a Mach-O binary
     if file "$copied_lib" | grep -q "Mach-O"; then
-        otool -L "$copied_lib"
+        otool -L "$copied_lib" >> "$1"-linkage.txt
     fi
 done
 
